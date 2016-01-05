@@ -13,7 +13,7 @@ if (ANDROID) {
 
 function TiPush(e) {
   this.backendUrl = e.backendUrl;
-  this.token = '';
+  this.token = Ti.App.Properties.getString('TiPushNotification_Token') || '';
   this.os = (ANDROID) ? 'Android' : 'iOS';
 }
 
@@ -40,24 +40,27 @@ TiPush.prototype.registerDevice = function(_prams) {
     }
     that.token = token;
 
-    var uploadParams = {};
+    if(!Ti.App.Properties.getString('TiPushNotification_Token')){
+      var uploadParams = {};
 
-    for (var key in that) {
-			if (['backendUrl', 'getToken', 'registerDevice'].indexOf(key) === -1) {
-        uploadParams[key] = that[key];
+      for (var key in that) {
+  			if (['backendUrl', 'getToken', 'registerDevice', 'cancelRegister', 'getObject'].indexOf(key) === -1) {
+          uploadParams[key] = that[key];
+        }
       }
+
+      var xhr = Ti.Network.createHTTPClient({
+        onload: function() {
+          Ti.API.debug("[TiPush] Token sent to our backend");
+          Ti.App.Properties.setString('TiPushNotification_Token', that.token);
+        },
+        onerror: function() {
+          Ti.API.error("[TiPush] Can't send tokend to our backend");
+        }
+      });
+      xhr.open("POST", that.backendUrl);
+      xhr.send(uploadParams);
     }
-
-    var xhr = Ti.Network.createHTTPClient({
-      onload: function() {
-        Ti.API.debug("[TiPush] Token sent to our backend");
-      },
-      onerror: function() {
-        Ti.API.error("[TiPush] Can't send tokend to our backend");
-      }
-    });
-    xhr.open("POST", that.backendUrl);
-    xhr.send(uploadParams);
   }
 
   function deviceTokenError(e) {
@@ -146,6 +149,49 @@ TiPush.prototype.registerDevice = function(_prams) {
 
 TiPush.prototype.getToken = function() {
   return this.token;
+};
+
+TiPush.prototype.cancelRegister = function () {
+  var that = this,
+    params = {};
+
+  for (var key in that) {
+    if (['backendUrl', 'getToken', 'registerDevice', 'cancelRegister'].indexOf(key) === -1) {
+      params[key] = that[key];
+    }
+  }
+
+  var xhr = Ti.Network.createHTTPClient({
+    onload: function() {
+      Ti.API.debug("[TiPush] Token deleted from our backend");
+      Ti.App.Properties.removeProperty('TiPushNotification_Token');
+
+      for (var key in that) {
+        if (['backendUrl', 'getToken', 'registerDevice', 'cancelRegister', 'getObject',  'os'].indexOf(key) === -1) {
+          that[key] = null;
+        }
+      }
+      that.token = '';
+    },
+    onerror: function() {
+      Ti.API.error("[TiPush] Can't delete token from our backend");
+    }
+  });
+  xhr.open("DELETE", that.backendUrl);
+  xhr.send(params);
+};
+
+TiPush.prototype.getObject = function () {
+  var obj = {}
+    , that = this;
+
+  for (var key in that) {
+    if (['backendUrl', 'getToken', 'registerDevice', 'cancelRegister', 'getObject'].indexOf(key) === -1) {
+      obj[key] = that[key];
+    }
+  }
+
+  return obj;
 };
 
 exports.init = function(param) {
